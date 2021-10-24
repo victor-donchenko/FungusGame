@@ -5,8 +5,8 @@ var progressBar;
 function setup() {
   createCanvas(400, 400);
   target = new Target(200,200,3);
-  e = new Environment(10);
   f = new Fungus(200,200);
+  e = new Environment(10,f);
   progressBar = new ProgressBar();
 }
 
@@ -142,31 +142,49 @@ class Nutrient{
     this.radius = 5;
     this.position = new Position(random(400),random(200)+200);
     this.index = i;
-    this.proxIdx;
+    this.proxIdx = [];
+    this.smallestDist = [];
     this.timerRefresh = 5;
+    this.timer = 0;
     this.collected = false;
     this.speed = 1;
   }
-  /*FindNearestPointOnHyphae(hyphae){
-    for(var i = 0; i < hyphae.length; i++){
-      for(var j = 0 ; j < hyphae[i].positions; j ++){
-        var dist = sqrt(pow(this.position.posX - hyphae[i].positions[j].posX, 2) + pow(this.position.posY - hyphae[i].positions[j].posY, 2));
-        if(dist > smallestDist){
-          
-        }
-      }
-  }*/
-  isNearHypha(hyphae){
-    for(var i = 0; i < hyphae.length; i++){
-      for(var j = 0 ; j < hyphae[i].positions; j += 30){
-        print("Hi");
-        if(sqrt(pow(this.position.posX - hyphae[i].positions[j].posX, 2) + pow(this.position.posY - hyphae[i].positions[j].posY, 2)) <= this.radius){
-          this.collected = true;
-        }
+  FindNearestPointOnHypha(hypha,hIdx){
+    this.smallestDist[hIdx] = 570; //400sqrt(2)
+    this.proxIdx[hIdx] = 0;
+    for(var j = 0 ; j < hypha.positions.length; j ++){
+      var dist = sqrt(pow(this.position.posX - hypha.positions[j].posX, 2) + pow(this.position.posY - hypha.positions[j].posY, 2));
+      if(dist < this.smallestDist[hIdx]){
+        this.smallestDist[hIdx] = dist;
+        this.proxIdx[hIdx] = j;
       }
     }
   }
-  Move(){
+  FindNearestPointOnHyphae(hyphae){
+    for(var i = 0; i < hyphae.length; i++){
+      FindNearestPointOnHypha(hyphae[i],i);
+    }
+  }
+  UpdateNearestPointOnHypha(hypha, hIdx){
+    var lastProxIdx = this.proxIdx[hIdx];
+    this.smallestDist[hIdx] = 570; //400sqrt(2)
+    for(var j = this.proxIdx[hIdx] - 20*this.speed ; j < this.proxIdx[hIdx] + 20*this.speed; j ++){
+      if (j < 0 || j >= hypha.positions.length){
+        continue;
+      }
+      var dist = sqrt(pow(this.position.posX - hypha.positions[j].posX, 2) + pow(this.position.posY - hypha.positions[j].posY, 2));
+      if(dist < this.smallestDist[hIdx]){
+        this.smallestDist[hIdx] = dist;
+        this.proxIdx[hIdx] = j;
+      }
+    }
+    if (lastProxIdx === this.proxIdx[hIdx]){
+      this.timer += 1;
+    } else {
+      this.timer = 0;
+    }
+  }
+  Move(hyphae){
     if(this.collected){
       return;
     }
@@ -185,7 +203,19 @@ class Nutrient{
       }
     }
     this.position.posX += movementX;
+    if (this.position.posX <= 0 || this.position.posX > 400) {
+      this.position.posX -= movementX;
+    }
     this.position.posY += movementY;
+    if (this.position.posY <= 0 || this.position.posY > 400) {
+      this.position.posY -= movementY;
+    }
+  }
+   
+  IsNear(hIdx) {
+    if(this.smallestDist[hIdx] < this.radius){
+      this.collected = true;
+    }
   }
   Show(){
     if(!this.collected){  
@@ -209,12 +239,16 @@ class Target {
   }
 }
 class Environment{
-  constructor(numN){
+  constructor(numN,f){
     this.numNutrients = numN;
     this.nutrients = [];
     this.availIdx = [];
+    this.fungus = f;
     for(var i = 0; i < this.numNutrients; i++){
       this.nutrients[i] = new Nutrient("Water", 10, color(0,0,255),i);
+      for(var j = 0; j < this.fungus.hyphae.length; j++){
+        this.nutrients[i].FindNearestPointOnHypha(this.fungus.hyphae[j],j);
+      }
     }
   }
   Show(){
@@ -228,7 +262,15 @@ class Environment{
     //Show nutrients
     for(var i = 0; i < this.numNutrients; i++){
       this.nutrients[i].Move();
-      this.nutrients[i].isNearHypha(f.hyphae);
+      this.nutrients[i].UpdateNearestPointOnHypha(this.fungus.hyphae[0],0);
+      if (this.nutrients[i].timer > this.nutrients[i].timerRefresh) {
+          for(var j = 0; j < this.fungus.hyphae.length; j++){
+            this.nutrients[i].FindNearestPointOnHypha(this.fungus.hyphae[j],j);
+          }
+      }
+      //print(this.nutrients[i].collected);
+      //print(this.nutrients[i].smallestDist[0]);
+      this.nutrients[i].IsNear(0);
       this.nutrients[i].Show();
     }
   }
@@ -253,5 +295,3 @@ class ProgressBar{
     }
   }
 }
-
-
